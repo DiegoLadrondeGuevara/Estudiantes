@@ -1,17 +1,19 @@
-# Usa imagen base con Python
 FROM python:3.11-slim
 
-# Establece el directorio de trabajo
 WORKDIR /app
 
-# Copia los archivos de la app
 COPY . .
 
-# Instala dependencias
-RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy pydantic email-validator psycopg2 python-dotenv
+# Instalar dependencias del sistema necesarias para psycopg2 y compilación
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
 
-# Expone el puerto donde corre FastAPI
+# Instala las dependencias usando el requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
 EXPOSE 8000
 
-# Comando para iniciar la app
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
