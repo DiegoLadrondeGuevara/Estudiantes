@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Instala dependencias
-RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy pydantic email-validator
+RUN pip install --no-cache-dir fastapi uvicorn sqlalchemy pydantic email-validator psycopg2 python-dotenv
 
 # Expone el puerto donde corre FastAPI
 EXPOSE 8000

@@ -6,10 +6,20 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from typing import List, Optional
+import os
+from dotenv import load_dotenv
 
-DATABASE_URL = "sqlite:///./users.db"
+load_dotenv()
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+#docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -d postgres
+#volumen:docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -v /path/to/host/directory:/var/lib/postgresql/data -d postgres
+
+# Cambiar a la URL de PostgreSQL
+DATABASE_URL = os.environ.get("DATABASE_URL")
+#docker exec -it postgres-db bash
+
+# Crear el motor para conectar con PostgreSQL
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
@@ -66,7 +76,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         password=user.password,  # sin hash, solo para pruebas!
         bio=user.bio
     )
-    db.add(db_user) 
+    db.add(db_user)
     try:
         db.commit()
         db.refresh(db_user)

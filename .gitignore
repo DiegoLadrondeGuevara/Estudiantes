@@ -1,15 +1,31 @@
-# Entorno virtual
+# Entornos virtuales
 env/
 .venv/
-
-# Cachés de Python
-__pycache__/
+venv/
+ENV/
+.env/
 
 # Archivos de entorno
 .env
 
-# Archivos de configuración locales (opcional)
-*.pyc
+# Cachés de Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Archivos compilados
 *.pyo
 *.pyd
 .Python
+
+# Bases de datos / Logs
+*.sqlite3
+*.db
+*.log
+
+# Cachés de pruebas
+.pytest_cache/
+
+# Configuraciones de editores
+.vscode/
+.idea/
