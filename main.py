@@ -1,21 +1,25 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from enum import Enum as PyEnum
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Enum as SqlEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from typing import List, Optional
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    # dotenv not installed or .env not present — continue without loading env file
+    pass
 
 #docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -d postgres
 #volumen:docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -v /path/to/host/directory:/var/lib/postgresql/data -d postgres
 
 # Cambiar a la URL de PostgreSQL
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./test.db")
 #docker exec -it postgres-db bash
 
 # Crear el motor para conectar con PostgreSQL
@@ -25,12 +29,18 @@ Base = declarative_base()
 
 app = FastAPI()
 
+# Role enum to distinguish Estudiante vs Profesor
+class Role(PyEnum):
+    Estudiante = "Estudiante"
+    Profesor = "Profesor"
+
 class UserDB(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     apellido = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
+    role = Column(SqlEnum(Role, name='role_enum'), nullable=False, default=Role.Estudiante)
     password = Column(String, nullable=False)  # texto plano para pruebas
     bio = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -43,11 +53,13 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     bio: Optional[str] = None
+    role: Optional[Role] = Role.Estudiante
 
 class UserUpdate(BaseModel):
     nombre: Optional[str]
     apellido: Optional[str]
     bio: Optional[str]
+    role: Optional[Role]
 
 class UserOut(BaseModel):
     id: int
@@ -55,6 +67,7 @@ class UserOut(BaseModel):
     apellido: str
     email: EmailStr
     bio: Optional[str]
+    role: Role
     created_at: datetime
 
     class Config:
@@ -74,7 +87,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         apellido=user.apellido,
         email=user.email,
         password=user.password,  # sin hash, solo para pruebas!
-        bio=user.bio
+        bio=user.bio,
+        role=user.role
     )
     db.add(db_user)
     try:
@@ -107,6 +121,8 @@ def update_user(user_id: int, updates: UserUpdate, db: Session = Depends(get_db)
         user.apellido = updates.apellido
     if updates.bio is not None:
         user.bio = updates.bio
+    if updates.role is not None:
+        user.role = updates.role
     db.commit()
     db.refresh(user)
     return user
