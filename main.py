@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from pydantic import BaseModel, EmailStr
 from enum import Enum as PyEnum
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Enum as SqlEnum
@@ -8,32 +8,29 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 from typing import List, Optional
 import os
+
+# Cargar variables de entorno si existe .env
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
-    # dotenv not installed or .env not present — continue without loading env file
     pass
 
-#docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -d postgres
-#volumen:docker run --name postgres-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=mi_contraseña -e POSTGRES_DB=users_db -p 5432:5432 -v /path/to/host/directory:/var/lib/postgresql/data -d postgres
-
-# Cambiar a la URL de PostgreSQL
+# Configuración de la base de datos
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./test.db")
-#docker exec -it postgres-db bash
-
-# Crear el motor para conectar con PostgreSQL
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
-app = FastAPI()
+# Instancia principal de la aplicación
+app = FastAPI(title="Servicio de Estudiantes")
 
-# Role enum to distinguish Estudiante vs Profesor
+# Enumeración de roles
 class Role(PyEnum):
     Estudiante = "Estudiante"
     Profesor = "Profesor"
 
+# Modelo de base de datos
 class UserDB(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
@@ -41,12 +38,13 @@ class UserDB(Base):
     apellido = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     role = Column(SqlEnum(Role, name='role_enum'), nullable=False, default=Role.Estudiante)
-    password = Column(String, nullable=False)  # texto plano para pruebas
+    password = Column(String, nullable=False)  # texto plano solo para pruebas
     bio = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
+# Modelos Pydantic
 class UserCreate(BaseModel):
     nombre: str
     apellido: str
@@ -73,6 +71,7 @@ class UserOut(BaseModel):
     class Config:
         orm_mode = True
 
+# Dependencia de base de datos
 def get_db():
     db = SessionLocal()
     try:
@@ -80,13 +79,18 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/register", status_code=201)
+# -------------------------------
+# Router específico de estudiantes
+# -------------------------------
+router = APIRouter(prefix="/estudiantes", tags=["Estudiantes"])
+
+@router.post("/register", status_code=201)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     db_user = UserDB(
         nombre=user.nombre,
         apellido=user.apellido,
         email=user.email,
-        password=user.password,  # sin hash, solo para pruebas!
+        password=user.password,
         bio=user.bio,
         role=user.role
     )
@@ -100,17 +104,16 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Email ya registrado")
     except Exception as e:
         db.rollback()
-        print(f"Error inesperado: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {e}")
 
-@app.get("/users/{user_id}", response_model=UserOut)
+@router.get("/users/{user_id}", response_model=UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return user
 
-@app.put("/users/{user_id}", response_model=UserOut)
+@router.put("/users/{user_id}", response_model=UserOut)
 def update_user(user_id: int, updates: UserUpdate, db: Session = Depends(get_db)):
     user = db.query(UserDB).filter(UserDB.id == user_id).first()
     if not user:
@@ -127,7 +130,10 @@ def update_user(user_id: int, updates: UserUpdate, db: Session = Depends(get_db)
     db.refresh(user)
     return user
 
-@app.get("/users", response_model=List[UserOut])
+@router.get("/users", response_model=List[UserOut])
 def list_users(db: Session = Depends(get_db)):
     users = db.query(UserDB).all()
     return users
+
+# Registrar el router en la app principal
+app.include_router(router)
